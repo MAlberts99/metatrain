@@ -3,6 +3,7 @@ import copy
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union
+import tqdm
 
 import torch
 from mace.tools.scripts_utils import (
@@ -410,7 +411,7 @@ class Trainer(TrainerInterface):
                 val_mae_calculator = MAEAccumulator(self.hypers["log_separate_blocks"])
 
             train_loss = 0.0
-            for batch in train_dataloader:
+            for batch in tqdm.tqdm(train_dataloader):
                 # Skip None batches (those outside batch_atom_bounds)
                 if should_skip_batch(batch, is_distributed, device):
                     continue
