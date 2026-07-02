@@ -32,6 +32,7 @@ from metatrain.utils.dtype import dtype_to_str
 from metatrain.utils.metadata import merge_metadata
 from metatrain.utils.scaler import Scaler
 from metatrain.utils.sum_over_atoms import sum_over_atoms
+from metatrain.utils.mean_over_atoms import mean_over_atoms
 
 from . import checkpoints
 from .documentation import ModelHypers
@@ -110,6 +111,7 @@ class MetaMACE(ModelInterface[ModelHypers]):
         # ---------------------------
 
         self.loaded_mace = self.hypers["mace_model"] is not None
+        self.intensive_targets: List[str] = self.hypers["intensive_targets"]
         # Atomic baselines and scale extracted from the loaded MACE model (if any).
         self._loaded_atomic_baseline = None
         self._loaded_scale = 1.0
@@ -284,7 +286,7 @@ class MetaMACE(ModelInterface[ModelHypers]):
                 targets={
                     target_name: target_info
                     for target_name, target_info in train_dataset_info.targets.items()
-                    if CompositionModel.is_valid_target(target_name, target_info)
+                    if CompositionModel.is_valid_target(target_name, target_info) and target_name not in self.intensive_targets
                 },
             ),
         )
@@ -443,11 +445,14 @@ class MetaMACE(ModelInterface[ModelHypers]):
                     per_atom_output, axis="samples", selection=selected_atoms
                 )
 
-            return_dict[output_name] = (
-                per_atom_output
-                if outputs[output_name].sample_kind == "atom"
-                else sum_over_atoms(per_atom_output)
-            )
+            if outputs[output_name].sample_kind == "atom":
+                reduced = per_atom_output
+            elif output_name in self.intensive_targets:
+                reduced = mean_over_atoms(per_atom_output)      # intensive
+            else:
+                reduced = sum_over_atoms(per_atom_output)        # extensive (energy-like)
+            return_dict[output_name] = reduced
+
 
         # -----------------------------------------
         #   Undo data preprocessing (eval only)

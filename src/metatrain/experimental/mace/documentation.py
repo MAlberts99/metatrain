@@ -115,9 +115,10 @@ the ``energy`` property. For example, you can use:
 
 """
 
-from typing import Literal, Optional
+from typing import Literal, Optional, List
 
 from typing_extensions import NotRequired, TypedDict
+from dataclasses import field
 
 from metatrain.pet.modules.finetuning import FullFinetuneHypers
 from metatrain.utils.additive import FixedCompositionWeights
@@ -285,6 +286,8 @@ class ModelHypers(TypedDict):
     """
     use_agnostic_product: bool = False
     """Use element agnostic product"""
+
+    intensive_targets: List[str] = []
 
 
 class TrainerHypers(TypedDict):
