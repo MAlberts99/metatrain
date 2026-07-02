@@ -33,6 +33,7 @@ from metatrain.utils.metadata import merge_metadata
 from metatrain.utils.scaler import Scaler
 from metatrain.utils.sum_over_atoms import sum_over_atoms
 from metatrain.utils.mean_over_atoms import mean_over_atoms
+from metatrain.utils.attention_pooling import AtomAttentionPooling, weighted_sum_over_atoms
 
 from . import checkpoints
 from .documentation import ModelHypers
@@ -112,6 +113,8 @@ class MetaMACE(ModelInterface[ModelHypers]):
 
         self.loaded_mace = self.hypers["mace_model"] is not None
         self.intensive_targets: List[str] = self.hypers["intensive_targets"]
+        self.intensive_pooling_strategy: str = self.hypers["intensive_pooling_strategy"]
+
         # Atomic baselines and scale extracted from the loaded MACE model (if any).
         self._loaded_atomic_baseline = None
         self._loaded_scale = 1.0
@@ -238,6 +241,8 @@ class MetaMACE(ModelInterface[ModelHypers]):
             product.linear.irreps_out for product in self.mace_model.products
         ]
         self.features_irreps = sum(self.per_layer_irreps, o3.Irreps())
+        if self.intensive_pooling_strategy == "attention":
+            self.attention_pool = AtomAttentionPooling(self.features_irreps, hidden=64)
 
         # ---------------------------
         #    Add heads for targets
@@ -447,8 +452,13 @@ class MetaMACE(ModelInterface[ModelHypers]):
 
             if outputs[output_name].sample_kind == "atom":
                 reduced = per_atom_output
-            elif output_name in self.intensive_targets:
-                reduced = mean_over_atoms(per_atom_output)      # intensive
+            elif output_name in self.intensive_targets and self.intensive_pooling_strategy == "mean":
+                reduced = mean_over_atoms(per_atom_output)      # intensive: Mean pooling
+            elif output_name in self.intensive_targets and self.intensive_pooling_strategy == "attention":
+                sys_idx = samples.column("system")
+                n_sys = 0 if sys_idx.numel() == 0 else int(sys_idx.max()) + 1
+                attn_w = self.attention_pool.weights(node_features, sys_idx, n_sys)
+                reduced = weighted_sum_over_atoms(per_atom_output, attn_w)      # intensive: Attention pooling
             else:
                 reduced = sum_over_atoms(per_atom_output)        # extensive (energy-like)
             return_dict[output_name] = reduced

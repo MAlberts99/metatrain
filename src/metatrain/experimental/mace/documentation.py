@@ -288,6 +288,7 @@ class ModelHypers(TypedDict):
     """Use element agnostic product"""
 
     intensive_targets: List[str] = []
+    intensive_pooling_strategy: str = "mean"
 
 
 class TrainerHypers(TypedDict):
